@@ -1,0 +1,22 @@
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.tmp.*
+
+# Build
+build/
+install/
+log/
+
+# OS
+.DS_Store
+
+# Record3D build artifacts
+record3d/build/
+record3d/.git/
+
+# IDE
+.vscode/
+.idea/
