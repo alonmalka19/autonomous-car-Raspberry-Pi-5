@@ -13,7 +13,8 @@ def generate_launch_description():
             'camera_type': 'record3d',
             'max_frame_width': 240,   # Lower resolution for faster processing
             'publish_rate': 15.0,     # 15 FPS - faster updates
-            'publish_depth': True     # Enable depth for distance tracking
+            'publish_depth': True,    # Enable depth for distance tracking
+            'rotate_90': True         # Rotate to landscape mode
         }],
         output='screen'
     )
@@ -44,14 +45,16 @@ def generate_launch_description():
             'right_backward_pin': 27,
             'right_forward_pin': 22,
             'stop_distance': 0.6,  # Stop when target is 60cm away
-            'left_zone': 0.35,
-            'right_zone': 0.65,
+            'left_zone': 0.25,
+            'right_zone': 0.75,
             'turn_pulse': 0.06,
             'obstacle_turn_pulse': 0.06,
-            'search_turn_pulse': 0.4,
+            'search_turn_pulse': 0.2,
             'frame_width': 240,  # Match camera width
             'obstacle_distance': 100.0,  # Track from ANY distance (effectively disabled obstacle avoidance)
-            'max_speed': 1.0  # 100% full power
+            'max_speed': 1.0,  # 100% power
+            'left_speed_factor': 0.7,  # Left motor at 60%
+            'right_speed_factor': 1.0  # Right motor at 100%
         }],
         output='screen'
     )

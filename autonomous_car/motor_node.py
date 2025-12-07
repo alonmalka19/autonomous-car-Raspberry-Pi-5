@@ -31,7 +31,11 @@ class MotorNode(Node):
 
         # Motor speed limit for 3-battery setup (12V protection)
         self.declare_parameter('max_speed', 0.65)  # 65% of full power (safe for 12V)
+        self.declare_parameter('left_speed_factor', 1.0)  # Left motor adjustment
+        self.declare_parameter('right_speed_factor', 1.0)  # Right motor adjustment
         self.max_speed = self.get_parameter('max_speed').value
+        self.left_speed_factor = self.get_parameter('left_speed_factor').value
+        self.right_speed_factor = self.get_parameter('right_speed_factor').value
 
         # GPIO setup with PWM enabled
         self.left_motor = Motor(
@@ -169,8 +173,10 @@ class MotorNode(Node):
         self.right_motor.stop()
 
     def _forward(self):
-        self.left_motor.forward(speed=self.max_speed)
-        self.right_motor.forward(speed=self.max_speed)
+        left_speed = self.max_speed * self.left_speed_factor
+        right_speed = self.max_speed * self.right_speed_factor
+        self.left_motor.forward(speed=left_speed)
+        self.right_motor.forward(speed=right_speed)
 
     def _turn_left(self, duration):
         self.left_motor.forward(speed=self.max_speed)

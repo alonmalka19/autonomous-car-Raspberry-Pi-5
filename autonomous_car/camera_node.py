@@ -27,6 +27,7 @@ class CameraNode(Node):
         self.declare_parameter('max_frame_width', 640)
         self.declare_parameter('publish_rate', 10.0)  # Hz
         self.declare_parameter('publish_depth', False)  # Not available for IP Webcam
+        self.declare_parameter('rotate_90', False)  # Rotate 90 degrees for landscape mode
 
         self.camera_type = self.get_parameter('camera_type').value
         self.camera_url = self.get_parameter('camera_url').value
@@ -34,6 +35,7 @@ class CameraNode(Node):
         self.max_width = self.get_parameter('max_frame_width').value
         self.rate = self.get_parameter('publish_rate').value
         self.publish_depth = self.get_parameter('publish_depth').value
+        self.rotate_90 = self.get_parameter('rotate_90').value
 
         # QoS for real-time sensor streaming - CRITICAL for low latency
         # Based on ROS 2 SensorDataQoS best practices
@@ -161,6 +163,12 @@ class CameraNode(Node):
                 depth = self.latest_depth
 
             self.new_frame_event.clear()
+
+            # Rotate 90 degrees if enabled (portrait to landscape)
+            if self.rotate_90:
+                rgb = cv2.rotate(rgb, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                if depth is not None:
+                    depth = cv2.rotate(depth, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
             # Resize RGB if needed
             if rgb.shape[1] > self.max_width:
