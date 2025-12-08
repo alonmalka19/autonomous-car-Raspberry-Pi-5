@@ -22,7 +22,7 @@ setup(
     maintainer='Alon Malka',
     maintainer_email='alon@example.com',
     description='Autonomous car with YOLO leg tracking and ROS 2 Jazzy',
-    license='Apache License 2.0',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',

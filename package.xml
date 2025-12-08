@@ -5,7 +5,7 @@
   <version>0.0.1</version>
   <description>Autonomous car with YOLO leg tracking and L298N motor control</description>
   <maintainer email="alon@example.com">Alon Malka</maintainer>
-  <license>Apache License 2.0</license>
+  <license>MIT</license>
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
