@@ -9,6 +9,95 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from collections import deque
+from dataclasses import dataclass
+import time
+
+
+@dataclass
+class PositionSample:
+    """Single position sample with timestamp"""
+    x: float
+    y: float
+    z: float  # distance
+    timestamp: float
+
+
+class MotionTracker:
+    """Tracks position history and predicts future position"""
+
+    def __init__(self, history_size=10, min_velocity_threshold=5.0):
+        self.history = deque(maxlen=history_size)
+        self.min_velocity_threshold = min_velocity_threshold  # pixels/second
+
+    def add_sample(self, x, y, z):
+        """Add new position sample"""
+        self.history.append(PositionSample(x, y, z, time.time()))
+
+    def get_velocity(self):
+        """Calculate current velocity (pixels/second)"""
+        if len(self.history) < 2:
+            return (0.0, 0.0)
+
+        curr = self.history[-1]
+        prev = self.history[-2]
+        dt = curr.timestamp - prev.timestamp
+
+        if dt < 0.001:
+            return (0.0, 0.0)
+
+        vx = (curr.x - prev.x) / dt
+        vy = (curr.y - prev.y) / dt
+        return (vx, vy)
+
+    def get_smoothed_velocity(self):
+        """Calculate smoothed velocity using average over history"""
+        if len(self.history) < 3:
+            return self.get_velocity()
+
+        # Use first and last samples for more stable velocity
+        first = self.history[0]
+        last = self.history[-1]
+        dt = last.timestamp - first.timestamp
+
+        if dt < 0.01:
+            return (0.0, 0.0)
+
+        vx = (last.x - first.x) / dt
+        vy = (last.y - first.y) / dt
+        return (vx, vy)
+
+    def predict_position(self, dt_ahead=0.1):
+        """Predict position dt_ahead seconds in the future"""
+        if not self.history:
+            return (0.0, 0.0, -1.0)
+
+        curr = self.history[-1]
+
+        if len(self.history) < 2:
+            return (curr.x, curr.y, curr.z)
+
+        vx, vy = self.get_smoothed_velocity()
+
+        # Only predict if velocity is significant
+        speed = (vx**2 + vy**2) ** 0.5
+        if speed < self.min_velocity_threshold:
+            return (curr.x, curr.y, curr.z)
+
+        pred_x = curr.x + vx * dt_ahead
+        pred_y = curr.y + vy * dt_ahead
+        return (pred_x, pred_y, curr.z)
+
+    def get_movement_direction(self):
+        """Get direction of movement based on velocity"""
+        vx, _ = self.get_smoothed_velocity()
+        if abs(vx) < self.min_velocity_threshold:
+            return None  # Not moving significantly
+        return "right" if vx > 0 else "left"
+
+    def clear(self):
+        """Clear history"""
+        self.history.clear()
 
 
 class DetectorNode(Node):
@@ -22,11 +111,29 @@ class DetectorNode(Node):
         self.declare_parameter('target_class', 'my_legs')
         self.declare_parameter('miss_limit', 3)
 
+        # Prediction parameters
+        self.declare_parameter('prediction_enabled', True)
+        self.declare_parameter('prediction_lookahead', 0.1)  # seconds
+        self.declare_parameter('prediction_history_size', 10)
+        self.declare_parameter('prediction_min_velocity', 5.0)  # pixels/second
+
         model_path = self.get_parameter('model_path').value
         self.conf = self.get_parameter('confidence').value
         self.inference_size = self.get_parameter('inference_size').value
         self.target_class = self.get_parameter('target_class').value
         self.miss_limit = self.get_parameter('miss_limit').value
+
+        # Prediction settings
+        self.prediction_enabled = self.get_parameter('prediction_enabled').value
+        self.prediction_lookahead = self.get_parameter('prediction_lookahead').value
+        history_size = self.get_parameter('prediction_history_size').value
+        min_velocity = self.get_parameter('prediction_min_velocity').value
+
+        # Initialize motion tracker for prediction
+        self.motion_tracker = MotionTracker(
+            history_size=history_size,
+            min_velocity_threshold=min_velocity
+        )
 
         # Load YOLO model
         self.model = YOLO(model_path)
@@ -199,15 +306,30 @@ class DetectorNode(Node):
                     distance = 0.20
                 # Otherwise trust LiDAR distance
 
+                # Add to motion tracker for prediction
+                self.motion_tracker.add_sample(cx, cy, distance)
+
+                # Get predicted position if enabled
+                pub_x, pub_y = float(cx), float(cy)
+                if self.prediction_enabled:
+                    pred_x, pred_y, _ = self.motion_tracker.predict_position(self.prediction_lookahead)
+                    pub_x, pub_y = float(pred_x), float(pred_y)
+
+                    # Draw prediction on debug frame (blue circle)
+                    if abs(pred_x - cx) > 2 or abs(pred_y - cy) > 2:
+                        cv2.circle(debug_frame, (int(pred_x), int(pred_y)), 8, (255, 0, 0), 2)
+                        cv2.line(debug_frame, (cx, cy), (int(pred_x), int(pred_y)), (255, 0, 0), 2)
+
                 # Draw distance and tracking mode on debug frame
-                text = f"{self.tracking_mode} | {distance:.2f}m"
+                vx, vy = self.motion_tracker.get_velocity()
+                text = f"{self.tracking_mode} | {distance:.2f}m | v={vx:.0f}"
                 cv2.putText(debug_frame, text, (x1, y1 - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # Publish position with distance (LiDAR or estimated)
+                # Publish predicted position with distance
                 pos_msg = Point()
-                pos_msg.x = float(cx)
-                pos_msg.y = float(cy)
+                pos_msg.x = pub_x
+                pos_msg.y = pub_y
                 pos_msg.z = distance
                 self.position_pub.publish(pos_msg)
 
@@ -217,12 +339,16 @@ class DetectorNode(Node):
                 self.status_pub.publish(status_msg)
 
             elif self.consecutive_misses >= self.miss_limit:
-                # Lost tracking - draw text
-                cv2.putText(debug_frame, f"LOST - searching {self.last_seen_direction}",
+                # Lost tracking - use velocity-based direction if available
+                movement_dir = self.motion_tracker.get_movement_direction()
+                search_direction = movement_dir if movement_dir else self.last_seen_direction
+
+                # Draw lost text
+                cv2.putText(debug_frame, f"LOST - searching {search_direction}",
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
                 status_msg = String()
-                status_msg.data = f"lost:{self.last_seen_direction}"
+                status_msg.data = f"lost:{search_direction}"
                 self.status_pub.publish(status_msg)
 
             # Publish debug image with current timestamp

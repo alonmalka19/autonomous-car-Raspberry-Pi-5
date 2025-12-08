@@ -14,10 +14,12 @@ A ROS2-based autonomous robot that tracks and follows human legs using computer 
 
 - **Real-time Leg Detection** - Custom YOLOv5 model trained for leg tracking
 - **Depth Sensing** - iPhone LiDAR via Record3D for accurate distance measurement
-- **Tank-Turn Steering** - Powerful rotation using differential drive
-- **Search Mode** - Automatically searches for lost targets
+- **PID Controller** - Smooth proportional steering with dead-zone filtering to prevent zigzag motion
+- **Motion Prediction** - Velocity-based position prediction to anticipate target movement
+- **Hybrid Tracking** - YOLO detection + Optical Flow fallback for continuous tracking
+- **Smart Search Mode** - Uses velocity history to predict target direction when lost
 - **Low Latency** - Optimized for real-time performance (~15 FPS)
-- **Web Monitoring** - Foxglove Studio and MJPEG streaming support
+- **Web Monitoring** - Foxglove Studio for remote debugging and visualization
 
 ## Hardware Requirements
 
@@ -54,7 +56,7 @@ Right Motor:
 
 ```bash
 cd ~/ros2_ws/src
-git clone https://github.com/YOUR_USERNAME/autonomous-leg-tracker.git autonomous_car
+git clone https://github.com/alonmalka19/autonomous-car-Raspberry-Pi-5.git autonomous_car
 ```
 
 ### 2. Install Dependencies
@@ -102,7 +104,8 @@ http://RASPBERRY_PI_IP:8080
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Camera Node   │────▶│  Detector Node   │────▶│   Motor Node    │
-│  (Record3D USB) │     │  (YOLOv5 + Flow) │     │  (L298N GPIO)   │
+│  (Record3D USB) │     │ YOLOv5 + Motion  │     │ PID Controller  │
+│  RGB + Depth    │     │    Predictor     │     │  (L298N GPIO)   │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
         │                        │                        │
         ▼                        ▼                        ▼
@@ -115,10 +118,9 @@ http://RASPBERRY_PI_IP:8080
 
 | Node | Purpose |
 |------|---------|
-| `camera_node` | Captures RGB + depth from iPhone via Record3D |
-| `detector_node` | YOLOv5 leg detection with optical flow fallback |
-| `motor_node` | Tank-turn motor control based on target position |
-| `mjpeg_server` | HTTP streaming for browser monitoring |
+| `camera_node` | Captures RGB + depth from iPhone via Record3D USB |
+| `detector_node` | YOLOv5 detection + motion prediction + optical flow fallback |
+| `motor_node` | PID-based smooth steering with dead-zone filtering |
 
 ## Parameters
 
@@ -127,38 +129,50 @@ http://RASPBERRY_PI_IP:8080
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `stop_distance` | 0.6 | Stop when target is 60cm away |
-| `left_zone` | 0.35 | Left zone threshold (0-35% of frame) |
-| `right_zone` | 0.65 | Right zone threshold (65-100% of frame) |
-| `turn_pulse` | 0.06 | Tracking turn duration (seconds) |
-| `search_turn_pulse` | 0.4 | Search turn duration (seconds) |
-| `max_speed` | 1.0 | Motor power (0.0-1.0) |
+| `far_distance` | 3.0 | Distance considered "far" for speed scaling |
+| `max_speed` | 0.6 | Maximum motor power (60%) |
+| `min_speed` | 0.4 | Minimum motor power when close |
+| `pid_kp` | 0.15 | PID proportional gain |
+| `pid_ki` | 0.0 | PID integral gain |
+| `pid_kd` | 0.8 | PID derivative gain (damping) |
 
 ### Detector Node
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `confidence` | 0.3 | YOLO detection threshold |
+| `confidence` | 0.2 | YOLO detection threshold |
 | `inference_size` | 192 | YOLO input resolution |
 | `miss_limit` | 3 | Frames before target is "lost" |
+| `prediction_enabled` | true | Enable motion prediction |
+| `prediction_lookahead` | 0.1 | Predict position 100ms ahead |
+| `prediction_history_size` | 10 | Position samples for velocity calculation |
 
 ## Behavior Logic
 
-### Target Tracking
+### Target Tracking with PID
 ```
-IF target in LEFT zone (x < 35%):
-    Turn LEFT (Tank Turn)
-ELSE IF target in RIGHT zone (x > 65%):
-    Turn RIGHT (Tank Turn)
-ELSE IF target CENTERED:
-    IF distance > 0.6m: Move FORWARD
-    ELSE: STOP (too close)
+1. Get target position (or predicted position if moving)
+2. Calculate error = target_x - frame_center
+3. Apply dead zone (30%) - ignore small errors
+4. PID calculates steering: Kp*error + Ki*integral + Kd*derivative
+5. Differential drive: adjust left/right motor speeds
+6. Speed scales with distance (slower when closer)
+```
+
+### Motion Prediction
+```
+1. Store position history with timestamps
+2. Calculate smoothed velocity over history
+3. Predict future position: pos + velocity * lookahead_time
+4. Motor node steers toward predicted position
 ```
 
 ### Search Mode
 ```
 IF target lost:
-    Turn toward last seen direction
-    Wait 1.0s cooldown between turns
+    Use velocity direction (if target was moving)
+    Otherwise use last seen direction
+    Turn toward expected location
 ```
 
 ## Project Structure
@@ -166,15 +180,13 @@ IF target lost:
 ```
 autonomous_car/
 ├── autonomous_car/           # Python package
-│   ├── camera_node.py       # Record3D camera driver
-│   ├── detector_node.py     # YOLO leg detection
-│   ├── motor_node.py        # Motor control
-│   └── mjpeg_server.py      # HTTP streaming
+│   ├── camera_node.py       # Record3D camera driver (RGB + depth)
+│   ├── detector_node.py     # YOLO + motion prediction + optical flow
+│   └── motor_node.py        # PID controller + differential drive
 ├── launch/
 │   └── robot_with_foxglove.launch.py
 ├── models/
-│   ├── best_mylegs_v5.pt    # Custom YOLOv5 model (Git LFS)
-│   └── yolov8n.pt           # Backup model
+│   └── best_mylegs_v5.pt    # Custom YOLOv5 model
 ├── record3d/                 # Record3D library
 ├── package.xml
 └── setup.py

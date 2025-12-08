@@ -26,35 +26,62 @@ def generate_launch_description():
         name='detector',
         parameters=[{
             'model_path': '/home/alonmalka/ros2_ws/src/autonomous_car/models/best_mylegs_v5.pt',
-            'confidence': 0.3,
+            'confidence': 0.2,
             'inference_size': 192,
             'target_class': 'my_legs',
-            'miss_limit': 3
+            'miss_limit': 3,
+
+            # Motion prediction settings
+            'prediction_enabled': True,        # Enable position prediction
+            'prediction_lookahead': 0.1,       # Predict 100ms ahead
+            'prediction_history_size': 10,     # Keep last 10 positions
+            'prediction_min_velocity': 5.0     # Min velocity to trigger prediction (pixels/sec)
         }],
         output='screen'
     )
 
-    # Motor Node
+    # Motor Node - With PID smooth tracking and dynamic speed
     motor_node = Node(
         package='autonomous_car',
         executable='motor_node',
         name='motors',
         parameters=[{
+            # GPIO pins
             'left_backward_pin': 23,
             'left_forward_pin': 24,
             'right_backward_pin': 27,
             'right_forward_pin': 22,
+
+            # Distance settings
             'stop_distance': 0.6,  # Stop when target is 60cm away
+            'far_distance': 3.0,   # Distance considered "far" (full speed)
+
+            # Zone thresholds (fallback for obstacle avoidance)
             'left_zone': 0.25,
             'right_zone': 0.75,
+
+            # Pulse durations (for obstacle avoidance and search)
             'turn_pulse': 0.06,
             'obstacle_turn_pulse': 0.06,
             'search_turn_pulse': 0.2,
+
+            # Frame settings
             'frame_width': 240,  # Match camera width
-            'obstacle_distance': 100.0,  # Track from ANY distance (effectively disabled obstacle avoidance)
-            'max_speed': 1.0,  # 100% power
-            'left_speed_factor': 0.7,  # Left motor at 60%
-            'right_speed_factor': 1.0  # Right motor at 100%
+            'obstacle_distance': 100.0,  # Track from ANY distance
+
+            # Speed settings
+            'max_speed': 0.6,      # 60% power at far distance
+            'min_speed': 0.4,      # 40% power when close to target
+            'left_speed_factor': 1.0,   # Left motor at 100%
+            'right_speed_factor': 1.0,  # Right motor at 100%
+
+            # PID Controller settings for smooth steering
+            'pid_kp': 0.15,  # Proportional: minimal reaction
+            'pid_ki': 0.0,   # Integral: disabled
+            'pid_kd': 0.8,   # Derivative: very strong damping
+
+            # Dynamic speed settings
+            'speed_distance_factor': 0.5  # How much distance affects speed
         }],
         output='screen'
     )
