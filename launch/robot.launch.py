@@ -1,7 +1,12 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import os
 
 def generate_launch_description():
+    # Get package directory for portable paths
+    pkg_dir = get_package_share_directory('autonomous_car')
+    model_path = os.path.join(pkg_dir, 'models', 'best_mylegs_v5.pt')
     return LaunchDescription([
         # Camera Node
         Node(
@@ -23,7 +28,7 @@ def generate_launch_description():
             executable='detector_node',
             name='detector',
             parameters=[{
-                'model_path': '/home/alonmalka/ros2_ws/src/autonomous_car/models/best_mylegs_v5.pt',
+                'model_path': model_path,
                 'confidence': 0.3,
                 'inference_size': 320,
                 'target_class': 'my_legs',

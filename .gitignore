@@ -20,3 +20,20 @@ record3d/.git/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.o
+*.a
+*.so
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
