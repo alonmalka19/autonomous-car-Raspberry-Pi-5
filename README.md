@@ -7,9 +7,6 @@
 
 A ROS2-based autonomous robot that tracks and follows human legs using computer vision. Built on Raspberry Pi 5 with real-time YOLOv5 detection and motor control.
 
-<!-- Add your demo GIF/image here -->
-<!-- ![Demo](docs/demo.gif) -->
-
 ## Features
 
 - **Real-time Leg Detection** - Custom YOLOv5 model trained for leg tracking
@@ -62,12 +59,23 @@ git clone https://github.com/alonmalka19/autonomous-car-Raspberry-Pi-5.git auton
 ### 2. Install Dependencies
 
 ```bash
+# Install Git LFS and pull model files
+git lfs install
+git lfs pull
+
 # Python packages
-pip install ultralytics opencv-python numpy gpiozero flask
+pip install -r requirements.txt
+
+# Record3D library (for iPhone camera streaming)
+# Note: On Raspberry Pi, you may need to build from source:
+# git clone https://github.com/marek-simonik/record3d
+# cd record3d && pip install .
 
 # ROS2 packages
 sudo apt install ros-jazzy-cv-bridge ros-jazzy-foxglove-bridge
 ```
+
+> **Note:** The model files (`models/*.pt`) are stored using Git LFS. Make sure to run `git lfs pull` after cloning to download the actual model files.
 
 ### 3. Build the Package
 
@@ -182,14 +190,18 @@ autonomous_car/
 ├── autonomous_car/           # Python package
 │   ├── camera_node.py       # Record3D camera driver (RGB + depth)
 │   ├── detector_node.py     # YOLO + motion prediction + optical flow
-│   └── motor_node.py        # PID controller + differential drive
+│   ├── motor_node.py        # PID controller + differential drive
+│   └── mjpeg_server.py      # HTTP video streaming server
 ├── launch/
+│   ├── robot.launch.py
 │   └── robot_with_foxglove.launch.py
 ├── models/
-│   └── best_mylegs_v5.pt    # Custom YOLOv5 model
-├── record3d/                 # Record3D library
+│   └── best_mylegs_v5.pt    # Custom YOLOv5 model (Git LFS)
+├── test/                     # ROS2 tests
+├── resource/
 ├── package.xml
-└── setup.py
+├── setup.py
+└── requirements.txt
 ```
 
 ## License

@@ -20,7 +20,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Alon Malka',
-    maintainer_email='alon@example.com',
+    maintainer_email='alonmalka19@gmail.com',
     description='Autonomous car with YOLO leg tracking and ROS 2 Jazzy',
     license='MIT',
     extras_require={

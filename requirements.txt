@@ -10,5 +10,8 @@ gpiozero>=2.0
 flask>=2.0.0
 requests>=2.28.0
 
+# Camera streaming from iPhone
+record3d>=1.4.0
+
 # ROS2 dependencies (install via apt)
 # sudo apt install ros-jazzy-cv-bridge ros-jazzy-foxglove-bridge
