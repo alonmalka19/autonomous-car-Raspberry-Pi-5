@@ -4,7 +4,7 @@
   <name>autonomous_car</name>
   <version>0.0.1</version>
   <description>Autonomous car with YOLO leg tracking and L298N motor control</description>
-  <maintainer email="alon@example.com">Alon Malka</maintainer>
+  <maintainer email="alonmalka19@gmail.com">Alon Malka</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>
